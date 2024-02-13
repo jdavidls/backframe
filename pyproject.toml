@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "backframe"
+version = "0.1.0"
+description = ""
+authors = ["J.David Luque <jdavidls@protonmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pymongo = "^4.6.1"
+inflector = "^3.1.1"
+pydantic = "^2.6.1"
+rich = "^13.7.0"
+motor = "^3.3.2"
+anyio = "^4.2.0"
+fastapi = "^0.109.2"
+
+[tool.poetry.group.dev.dependencies]
+watchdog = "^4.0.0"
+pylint = "^3.0.3"
+black = "^24.1.1"
+isort = "^5.13.2"
+
+[tool.poe.tasks.watch]
+help = "Run tests in watch mode"
+script = "scripts:run_watch"
+
+[tool.poe.tasks.test]
+help = "Run tests"
+script = "scripts:run_tests"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
