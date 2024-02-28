@@ -26,6 +26,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorClientSession,
     AsyncIOMotorDatabase,
     AsyncIOMotorGridFSBucket,
+    AsyncIOMotorCollection,
 )
 from pydantic import BaseModel, Field, MongoDsn, TypeAdapter
 from pydantic_core import core_schema
@@ -71,10 +72,10 @@ class Persistence:
     def current(cls):
         return current_session().persistence
 
-    @classmethod
-    @property
-    def session(cls):
-        return current_session()
+    # @classmethod
+    # @property
+    # def session(cls):
+    #     return current_session()
 
     @cached_property
     def gridfs(self):
@@ -135,12 +136,7 @@ class Persistence:
 
     @asynccontextmanager
     async def session(self):
-        """
-        Enter the persistence session context.
-
-        Yields:
-            PersistenceSession: The persistence session.
-        """
+        """Enter the persistence session context."""
         async with await self.client.start_session(causal_consistency=True) as session:
             session = self.Session(self, session)
             session_token = _persistence_session.set(session)
@@ -275,15 +271,8 @@ class Persistent(BaseModel):
         id (Optional[Id]): Unique object identifier.
     """
 
-    # __repository__: ClassVar[RepositoryBase[Self]]
-    # Id: ClassVar[type[Id]]
-    # Ref: ClassVar[type[Ref[Self]]]
-    # Repository: ClassVar[type[Repository[Self]]]
-
-    Id: ClassVar[type[Id]]
-
+    Id: ClassVar[type[Id]] = Id
     Ref: ClassVar[type[RefBase[Self]]]
-
     Repository: ClassVar[type[RepositoryBase[Self]]]
 
     id: Optional[Id] = Field(None, title="Unique object Id", alias="_id")
@@ -574,7 +563,9 @@ class RepositoryBase(Generic[P]):
     def list_type_adapter(self):
         return TypeAdapter(list[persistent_cls_of(self)])
 
-    def _get_collection_and_session(self):
+    def _get_collection_and_session(
+        self,
+    ) -> tuple[AsyncIOMotorCollection, AsyncIOMotorClientSession]:
         session = current_session()
         col = session.persistence.database.get_collection(self.tablename)
         return col, session._inner
@@ -597,14 +588,30 @@ class RepositoryBase(Generic[P]):
         collection, session = self._get_collection_and_session()
         result = await collection.update_one(*args, session=session, **kwargs)
         assert result.acknowledged
-        # if not result.acknowledged:
-        # raise Exception("Operation not acknowledged")
+        return result
+
+    async def _update_many(self, *args, **kwargs):
+        collection, session = self._get_collection_and_session()
+        result = await collection.update_many(*args, session=session, **kwargs)
+        assert result.acknowledged
+        return result
+
+    async def _find_one_and_update(self, *args, **kwargs):
+        collection, session = self._get_collection_and_session()
+        result = await collection.find_one_and_update(*args, session=session, **kwargs)
+        assert result.acknowledged
         return result
 
     def _find(self, *args, **kwargs) -> Cursor[P]:
         collection, session = self._get_collection_and_session()
         inner_cursor = collection.find(*args, session=session, **kwargs)
         return self.Cursor(inner_cursor, self.type_adapter.validate_python)
+
+    def _aggregate(self, *args, result_type: type, **kwargs):
+        collection, session = self._get_collection_and_session()
+        inner_cursor = collection.aggregate(*args, session=session, **kwargs)
+        type_parser = TypeAdapter(result_type).validate_python
+        return self.Cursor(inner_cursor, type_parser)
 
     async def insert_obj(self, obj: P):
         "Create ... and assigns a new id to the object"
@@ -737,6 +744,10 @@ class Cursor(Generic[P]):
     def limit(self, *args, **kwargs) -> Self:
         cls = type(self)
         return cls(self._inner.limit(*args, **kwargs), self._item_parser)
+
+    def sort(self, *args, **kwargs) -> Self:
+        cls = type(self)
+        return cls(self._inner.sort(*args, **kwargs), self._item_parser)
 
     async def as_list(self):
         return [x async for x in self]

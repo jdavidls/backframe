@@ -12,7 +12,8 @@ def fix_response(fn):
     """
     type_adapter: Optional[TypeAdapter] = None
 
-    assert fn.__annotations__.get("return"), f"fn Debe especificar retorno"
+    if "return" not in fn.__annotations__:
+        raise TypeError(f'fix_response: "{fn.__name__}" must have a return annotation')
 
     @wraps(fn)
     async def wrapper(*args, **kwargs):

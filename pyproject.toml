@@ -29,7 +29,6 @@ script = "scripts:run_watch"
 help = "Run tests"
 script = "scripts:run_tests"
 
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
